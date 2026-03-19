@@ -362,9 +362,19 @@
                     </div>
                 </div>
 
-                <!-- Weekly Chart -->
+                <!-- Weekly Chart with week selector -->
                 <div class="glass-panel rounded-2xl p-4">
                     <h3 class="font-semibold mb-3 text-sm">Weekly Pattern</h3>
+                    <div class="flex justify-between items-center mb-2">
+                        <button onclick="previousWeek()" class="text-xs bg-slate-700 px-2 py-1 rounded hover:bg-slate-600">
+                            <i class="fas fa-chevron-left"></i> Prev
+                        </button>
+                        <input type="week" id="weekPicker" class="bg-slate-800 text-white text-xs rounded px-1 py-1 border border-slate-600 w-32 text-center" />
+                        <button onclick="nextWeek()" class="text-xs bg-slate-700 px-2 py-1 rounded hover:bg-slate-600">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    <div class="text-xs text-center text-slate-400 mb-2" id="weekRangeLabel"></div>
                     <div class="h-32">
                         <canvas id="weeklyChart"></canvas>
                     </div>
@@ -624,6 +634,7 @@
         let dailyHistory = {}; // key: date string YYYY-MM-DD, value: total seconds studied that day
         let chapterDaily = {}; // key: date, then subject, then chapter id -> seconds
         let weeklyChart = null;
+        let currentWeekStart = null; // Date object for Monday of current displayed week
 
         // ==================== LOCALSTORAGE FUNCTIONS ====================
         function loadData() {
@@ -671,6 +682,26 @@
             const year = d.getFullYear();
             const month = String(d.getMonth() + 1).padStart(2, '0');
             const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // Get the Monday of the week containing the given date
+        function getWeekStart(date) {
+            const d = new Date(date);
+            const day = d.getDay(); // 0 = Sunday, 1 = Monday, ...
+            // If Sunday (0), we need to go back 6 days to get Monday? Actually we want Monday as start.
+            // If day is Monday (1), offset = 0; Tuesday (2) offset = -1; ... Sunday (0) offset = -6.
+            const diff = d.getDay() === 0 ? -6 : 1 - d.getDay();
+            d.setDate(d.getDate() + diff);
+            d.setHours(0,0,0,0);
+            return d;
+        }
+
+        // Format date as YYYY-MM-DD
+        function formatYMD(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         }
 
@@ -736,29 +767,74 @@
         }
 
         // ==================== CHART FUNCTIONS ====================
-        function initChart() {
-            const ctx = document.getElementById('weeklyChart').getContext('2d');
-            // Generate labels for the last 7 days with date (e.g., "19 Mar")
+        // Update chart to show week starting at 'start' (Date object, Monday)
+        function updateChartForWeek(start) {
+            if (!weeklyChart) return;
             const labels = [];
             const data = [];
-            for (let i = 6; i >= 0; i--) {
-                const d = new Date();
-                d.setDate(d.getDate() - i);
-                const dateStr = d.toISOString().split('T')[0];
-                // Format: "19 Mar" (day + short month)
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(start);
+                d.setDate(start.getDate() + i);
+                const dateStr = formatYMD(d);
                 const day = d.getDate();
                 const month = d.toLocaleDateString('en-US', { month: 'short' });
                 labels.push(`${day} ${month}`);
                 const seconds = dailyHistory[dateStr] || 0;
-                data.push(seconds / 3600); // convert to hours
+                data.push(seconds / 3600);
             }
+            weeklyChart.data.labels = labels;
+            weeklyChart.data.datasets[0].data = data;
+            weeklyChart.update();
+
+            // Update week range label
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            const startStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const endStr = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            document.getElementById('weekRangeLabel').textContent = `${startStr} – ${endStr}`;
+
+            // Update week picker value (format "YYYY-Www")
+            const year = start.getFullYear();
+            const weekNum = getWeekNumber(start);
+            const weekPicker = document.getElementById('weekPicker');
+            weekPicker.value = `${year}-W${String(weekNum).padStart(2, '0')}`;
+        }
+
+        // Helper: get ISO week number for a date (Monday as first day)
+        function getWeekNumber(d) {
+            const date = new Date(d.getTime());
+            date.setHours(0,0,0,0);
+            // Thursday in current week decides the year
+            date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+            const year = date.getFullYear();
+            const firstThursday = new Date(year, 0, 4);
+            firstThursday.setHours(0,0,0,0);
+            const week = Math.floor(1 + 0.5 + (date - firstThursday) / 86400000 / 7);
+            return week;
+        }
+
+        // Parse week string "YYYY-Www" to get the Monday date
+        function getDateFromWeek(year, week) {
+            const date = new Date(year, 0, 4); // January 4th is always in week 1
+            date.setHours(0,0,0,0);
+            // Move to Monday of week 1
+            date.setDate(date.getDate() - (date.getDay() + 6) % 7);
+            // Add weeks
+            date.setDate(date.getDate() + (week - 1) * 7);
+            return date;
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('weeklyChart').getContext('2d');
+            // Start with current week (Monday of this week)
+            currentWeekStart = getWeekStart(new Date());
 
             weeklyChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: labels,
+                    labels: [], // will be set by updateChartForWeek
                     datasets: [{
-                        data: data,
+                        data: [],
                         backgroundColor: 'rgba(139, 92, 246, 0.6)',
                         borderColor: 'rgba(139, 92, 246, 1)',
                         borderWidth: 1,
@@ -773,10 +849,9 @@
                         tooltip: {
                             callbacks: {
                                 title: function(context) {
-                                    // Show full date in tooltip title
                                     const index = context[0].dataIndex;
-                                    const d = new Date();
-                                    d.setDate(d.getDate() - (6 - index));
+                                    const d = new Date(currentWeekStart);
+                                    d.setDate(currentWeekStart.getDate() + index);
                                     return d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
                                 },
                                 label: function(context) {
@@ -791,10 +866,9 @@
                     onClick: (event, elements) => {
                         if (elements.length > 0) {
                             const index = elements[0].index;
-                            // Get date for that bar
-                            const d = new Date();
-                            d.setDate(d.getDate() - (6 - index));
-                            const dateStr = d.toISOString().split('T')[0];
+                            const d = new Date(currentWeekStart);
+                            d.setDate(currentWeekStart.getDate() + index);
+                            const dateStr = formatYMD(d);
                             showDailyBreakdown(dateStr);
                         }
                     },
@@ -807,20 +881,40 @@
                     }
                 }
             });
+
+            updateChartForWeek(currentWeekStart);
+
+            // Set week picker initial value
+            const year = currentWeekStart.getFullYear();
+            const weekNum = getWeekNumber(currentWeekStart);
+            document.getElementById('weekPicker').value = `${year}-W${String(weekNum).padStart(2, '0')}`;
         }
 
-        function updateWeeklyChart() {
-            if (!weeklyChart) return;
-            const newData = [];
-            for (let i = 6; i >= 0; i--) {
-                const d = new Date();
-                d.setDate(d.getDate() - i);
-                const dateStr = d.toISOString().split('T')[0];
-                const seconds = dailyHistory[dateStr] || 0;
-                newData.push(seconds / 3600);
-            }
-            weeklyChart.data.datasets[0].data = newData;
-            weeklyChart.update();
+        function previousWeek() {
+            const newStart = new Date(currentWeekStart);
+            newStart.setDate(currentWeekStart.getDate() - 7);
+            currentWeekStart = newStart;
+            updateChartForWeek(currentWeekStart);
+        }
+
+        function nextWeek() {
+            const newStart = new Date(currentWeekStart);
+            newStart.setDate(currentWeekStart.getDate() + 7);
+            currentWeekStart = newStart;
+            updateChartForWeek(currentWeekStart);
+        }
+
+        function onWeekPickerChange() {
+            const picker = document.getElementById('weekPicker');
+            const value = picker.value;
+            if (!value) return;
+            const match = value.match(/^(\d{4})-W(\d{2})$/);
+            if (!match) return;
+            const year = parseInt(match[1], 10);
+            const week = parseInt(match[2], 10);
+            const newStart = getDateFromWeek(year, week);
+            currentWeekStart = newStart;
+            updateChartForWeek(currentWeekStart);
         }
 
         // ==================== DAILY BREAKDOWN MODAL ====================
@@ -840,7 +934,7 @@
 
             for (let subjectCode in data) {
                 const subject = subjects[subjectCode];
-                if (!subject) continue; // safety
+                if (!subject) continue;
                 const chapterTimes = data[subjectCode];
                 html += `<div class="mt-2"><span class="font-semibold text-${subject.color}-400">${subject.name}</span>`;
                 for (let chapterId in chapterTimes) {
@@ -857,7 +951,6 @@
             const totalTime = secondsToTime(total);
             html += `<div class="mt-4 pt-2 border-t border-slate-600 flex justify-between font-bold"><span>Total</span><span class="font-mono">${totalTime.h}:${totalTime.m}:${totalTime.s}</span></div>`;
 
-            // Create and show a modal (reuse your modal style)
             const modal = document.createElement('div');
             modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4';
             modal.innerHTML = `
@@ -1375,7 +1468,15 @@
             }
             saveData();
             recalculateStreak();
-            updateWeeklyChart();
+            // If the displayed week includes today, update chart
+            const today = getTodayDateString();
+            const start = currentWeekStart;
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            const todayDate = new Date();
+            if (todayDate >= start && todayDate <= end) {
+                updateChartForWeek(currentWeekStart);
+            }
         }
 
         function stopStopwatch() {
@@ -1418,7 +1519,15 @@
             updateSubjectStatistics();
             saveData();
             recalculateStreak();
-            updateWeeklyChart();
+            // Update chart if today is in displayed week
+            const today = getTodayDateString();
+            const start = currentWeekStart;
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            const todayDate = new Date();
+            if (todayDate >= start && todayDate <= end) {
+                updateChartForWeek(currentWeekStart);
+            }
         }
 
         function updateStopwatchDisplay() {
@@ -1511,6 +1620,9 @@
             updateTodayBreakdown();
             updateSubjectCards();
             recalculateStreak();
+
+            // Attach week picker change event
+            document.getElementById('weekPicker').addEventListener('change', onWeekPickerChange);
         };
     </script>
 </body>
