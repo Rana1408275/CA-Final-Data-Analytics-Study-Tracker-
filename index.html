@@ -622,6 +622,7 @@
         let isRunning = false;
         let todayStudy = { FR: 0, AFM: 0, AUDIT: 0, DT: 0, IDT: 0, IBS: 0 };
         let dailyHistory = {}; // key: date string YYYY-MM-DD, value: total seconds studied that day
+        let chapterDaily = {}; // key: date, then subject, then chapter id -> seconds
         let weeklyChart = null;
 
         // ==================== LOCALSTORAGE FUNCTIONS ====================
@@ -644,6 +645,10 @@
                     if (data.dailyHistory) {
                         dailyHistory = data.dailyHistory;
                     }
+                    // Restore chapter daily breakdown
+                    if (data.chapterDaily) {
+                        chapterDaily = data.chapterDaily;
+                    }
                 } catch (e) {
                     console.error('Failed to load data', e);
                 }
@@ -654,7 +659,8 @@
             const data = {
                 subjects: subjects,
                 todayStudy: todayStudy,
-                dailyHistory: dailyHistory
+                dailyHistory: dailyHistory,
+                chapterDaily: chapterDaily
             };
             localStorage.setItem('studyTrackerData', JSON.stringify(data));
         }
@@ -684,13 +690,30 @@
             }
         }
 
-        // Add seconds to today's history
+        // Add seconds to today's history (total per day)
         function addToDailyHistory(seconds) {
             const today = getTodayDateString();
             if (!dailyHistory[today]) {
                 dailyHistory[today] = 0;
             }
             dailyHistory[today] += seconds;
+            saveData();
+        }
+
+        // Add seconds to today's chapter breakdown
+        function addToChapterDaily(seconds, subjectCode, chapterId) {
+            if (!subjectCode || !chapterId) return;
+            const today = getTodayDateString();
+            if (!chapterDaily[today]) {
+                chapterDaily[today] = {};
+            }
+            if (!chapterDaily[today][subjectCode]) {
+                chapterDaily[today][subjectCode] = {};
+            }
+            if (!chapterDaily[today][subjectCode][chapterId]) {
+                chapterDaily[today][subjectCode][chapterId] = 0;
+            }
+            chapterDaily[today][subjectCode][chapterId] += seconds;
             saveData();
         }
 
@@ -713,82 +736,140 @@
         }
 
         // ==================== CHART FUNCTIONS ====================
-function initChart() {
-    const ctx = document.getElementById('weeklyChart').getContext('2d');
-    // Generate labels for the last 7 days with date (e.g., "19 Mar")
-    const labels = [];
-    const data = [];
-    for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
-        // Format: "19 Mar" (day + short month)
-        const day = d.getDate();
-        const month = d.toLocaleDateString('en-US', { month: 'short' });
-        labels.push(`${day} ${month}`);
-        const seconds = dailyHistory[dateStr] || 0;
-        data.push(seconds / 3600); // convert to hours
-    }
+        function initChart() {
+            const ctx = document.getElementById('weeklyChart').getContext('2d');
+            // Generate labels for the last 7 days with date (e.g., "19 Mar")
+            const labels = [];
+            const data = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const dateStr = d.toISOString().split('T')[0];
+                // Format: "19 Mar" (day + short month)
+                const day = d.getDate();
+                const month = d.toLocaleDateString('en-US', { month: 'short' });
+                labels.push(`${day} ${month}`);
+                const seconds = dailyHistory[dateStr] || 0;
+                data.push(seconds / 3600); // convert to hours
+            }
 
-    weeklyChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: data,
-                backgroundColor: 'rgba(139, 92, 246, 0.6)',
-                borderColor: 'rgba(139, 92, 246, 1)',
-                borderWidth: 1,
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        title: function(context) {
-                            // Show full date in tooltip title
-                            const index = context[0].dataIndex;
+            weeklyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: 'rgba(139, 92, 246, 0.6)',
+                        borderColor: 'rgba(139, 92, 246, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    // Show full date in tooltip title
+                                    const index = context[0].dataIndex;
+                                    const d = new Date();
+                                    d.setDate(d.getDate() - (6 - index));
+                                    return d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+                                },
+                                label: function(context) {
+                                    let hours = context.raw;
+                                    let wholeHours = Math.floor(hours);
+                                    let minutes = Math.round((hours - wholeHours) * 60);
+                                    return `Study time: ${wholeHours}h ${minutes}m`;
+                                }
+                            }
+                        }
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            // Get date for that bar
                             const d = new Date();
                             d.setDate(d.getDate() - (6 - index));
-                            return d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
-                        },
-                        label: function(context) {
-                            let hours = context.raw;
-                            let wholeHours = Math.floor(hours);
-                            let minutes = Math.round((hours - wholeHours) * 60);
-                            return `Study time: ${wholeHours}h ${minutes}m`;
+                            const dateStr = d.toISOString().split('T')[0];
+                            showDailyBreakdown(dateStr);
+                        }
+                    },
+                    scales: {
+                        y: { display: false },
+                        x: { 
+                            grid: { display: false },
+                            ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 } }
                         }
                     }
                 }
-            },
-            scales: {
-                y: { display: false },
-                x: { 
-                    grid: { display: false },
-                    ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 } }
-                }
-            }
+            });
         }
-    });
-}
 
-function updateWeeklyChart() {
-    if (!weeklyChart) return;
-    const newData = [];
-    for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
-        const seconds = dailyHistory[dateStr] || 0;
-        newData.push(seconds / 3600);
-    }
-    weeklyChart.data.datasets[0].data = newData;
-    weeklyChart.update();
-}
+        function updateWeeklyChart() {
+            if (!weeklyChart) return;
+            const newData = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const dateStr = d.toISOString().split('T')[0];
+                const seconds = dailyHistory[dateStr] || 0;
+                newData.push(seconds / 3600);
+            }
+            weeklyChart.data.datasets[0].data = newData;
+            weeklyChart.update();
+        }
+
+        // ==================== DAILY BREAKDOWN MODAL ====================
+        function showDailyBreakdown(dateStr) {
+            const data = chapterDaily[dateStr];
+            if (!data) {
+                alert(`No study data for ${dateStr}`);
+                return;
+            }
+
+            // Format date nicely
+            const d = new Date(dateStr + 'T00:00:00');
+            const formattedDate = d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+
+            let html = `<h3 class="text-lg font-bold mb-3">Study breakdown for ${formattedDate}</h3>`;
+            let total = 0;
+
+            for (let subjectCode in data) {
+                const subject = subjects[subjectCode];
+                if (!subject) continue; // safety
+                const chapterTimes = data[subjectCode];
+                html += `<div class="mt-2"><span class="font-semibold text-${subject.color}-400">${subject.name}</span>`;
+                for (let chapterId in chapterTimes) {
+                    const chapter = subject.chapters.find(ch => ch.id == chapterId);
+                    const chapterName = chapter ? chapter.name : `Chapter ${chapterId}`;
+                    const seconds = chapterTimes[chapterId];
+                    const time = secondsToTime(seconds);
+                    html += `<div class="ml-4 text-sm flex justify-between"><span>${chapterName}</span><span class="font-mono">${time.h}:${time.m}:${time.s}</span></div>`;
+                    total += seconds;
+                }
+                html += `</div>`;
+            }
+
+            const totalTime = secondsToTime(total);
+            html += `<div class="mt-4 pt-2 border-t border-slate-600 flex justify-between font-bold"><span>Total</span><span class="font-mono">${totalTime.h}:${totalTime.m}:${totalTime.s}</span></div>`;
+
+            // Create and show a modal (reuse your modal style)
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4';
+            modal.innerHTML = `
+                <div class="glass-panel rounded-2xl p-6 w-full max-w-lg modal-enter max-h-[90vh] overflow-y-auto">
+                    ${html}
+                    <div class="flex justify-end mt-4">
+                        <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-purple-600 rounded-xl text-white">Close</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
 
         // ==================== EXISTING FUNCTIONS (all kept) ====================
         function selectSubject(subject) {
@@ -1254,7 +1335,7 @@ function updateWeeklyChart() {
             closeLectureDetailModal();
         }
 
-        // Stopwatch Functions (modified to update daily history)
+        // Stopwatch Functions (modified to update daily history and chapter daily)
         function startStopwatch() {
             if (!currentChapter) {
                 alert('Please select a chapter first!');
@@ -1285,9 +1366,12 @@ function updateWeeklyChart() {
             document.getElementById('pauseBtn').classList.add('hidden');
             document.getElementById('recordingIndicator').classList.add('hidden');
             document.getElementById('stopwatchCard').classList.remove('stopwatch-active');
-            // Add accumulated time to daily history
+            // Add accumulated time to daily history and chapter daily
             if (stopwatchSeconds > 0) {
                 addToDailyHistory(stopwatchSeconds);
+                if (currentSubject && currentChapter) {
+                    addToChapterDaily(stopwatchSeconds, currentSubject, currentChapter.id);
+                }
             }
             saveData();
             recalculateStreak();
@@ -1298,8 +1382,11 @@ function updateWeeklyChart() {
             clearInterval(stopwatchInterval);
 
             if (stopwatchSeconds > 0) {
-                // Add time to daily history
+                // Add time to daily history and chapter daily
                 addToDailyHistory(stopwatchSeconds);
+                if (currentSubject && currentChapter) {
+                    addToChapterDaily(stopwatchSeconds, currentSubject, currentChapter.id);
+                }
 
                 if (currentLecture) {
                     currentLecture.completedSeconds = Math.min(
