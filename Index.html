@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CA Final Study Analytics | Chapter & Lecture Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Space Grotesk', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            transition: all 0.3s ease;
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .chapter-card {
+            transition: all 0.3s ease;
+        }
+
+        .chapter-card:hover {
+            transform: translateX(5px);
+        }
+
+        .chapter-card.active {
+            border-left: 4px solid currentColor;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .lecture-item {
+            transition: all 0.2s ease;
+        }
+
+        .lecture-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .progress-ring {
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        .progress-ring-circle {
+            transition: stroke-dashoffset 0.5s ease;
+        }
+
+        .stopwatch-active {
+            animation: border-pulse 2s infinite;
+        }
+
+        @keyframes border-pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(139, 92, 246, 0.6); }
+        }
+
+        .modal-enter {
+            animation: modalSlide 0.3s ease-out;
+        }
+
+        @keyframes modalSlide {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .streak-flame {
+            animation: flicker 2s infinite alternate;
+        }
+
+        @keyframes flicker {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .breadcrumb {
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.2) 0%, transparent 100%);
+        }
+    </style>
+    <base target="_blank">
+</head>
+<body class="text-white min-h-screen p-4 md:p-6">
+    <div class="max-w-7xl mx-auto">
+
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div>
+                <div class="flex items-center gap-3 mb-1">
+                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-2xl font-bold">
+                        📚
+                    </div>
+                    <div>
+                        <h1 class="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
+                            CA Final Analytics
+                        </h1>
+                        <p class="text-slate-400 text-sm">Chapter-wise Study Tracker</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div class="glass-panel rounded-2xl px-6 py-3 flex items-center gap-3 border border-orange-500/30 bg-orange-500/10">
+                    <span class="streak-flame text-3xl">🔥</span>
+                    <div>
+                        <div class="text-2xl font-bold text-orange-400" id="streakCount">12</div>
+                        <div class="text-xs text-orange-300">Day Streak</div>
+                    </div>
+                </div>
+                <button onclick="toggleTheme()" class="glass-panel p-3 rounded-xl hover:bg-white/10 transition-all">
+                    <i class="fas fa-sun text-yellow-400 text-lg" id="themeIcon"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Subject Selector -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+            <div onclick="selectSubject('FR')" class="subject-card glass-panel rounded-2xl p-4 border-l-4 border-blue-500 bg-blue-500/10 cursor-pointer hover:bg-blue-500/20 transition-all" data-subject="FR">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs text-blue-400 font-bold">FR</span>
+                    <div class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                        <i class="fas fa-calculator text-blue-400 text-sm"></i>
+                    </div>
+                </div>
+                <h3 class="font-semibold text-sm mb-1 text-blue-100">Financial Reporting</h3>
+                <div class="text-2xl font-bold font-mono text-blue-400" id="fr-time">00:00</div>
+                <div class="text-xs text-slate-400 mt-1" id="fr-progress">0% (0/0 Ch)</div>
+            </div>
+
+            <div onclick="selectSubject('AFM')" class="subject-card glass-panel rounded-2xl p-4 border-l-4 border-purple-500 bg-purple-500/10 cursor-pointer hover:bg-purple-500/20 transition-all" data-subject="AFM">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs text-purple-400 font-bold">AFM</span>
+                    <div class="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
+                        <i class="fas fa-chart-line text-purple-400 text-sm"></i>
+                    </div>
+                </div>
+                <h3 class="font-semibold text-sm mb-1 text-purple-100">Advanced Financial Management</h3>
+                <div class="text-2xl font-bold font-mono text-purple-400" id="afm-time">00:00</div>
+                <div class="text-xs text-slate-400 mt-1" id="afm-progress">0% (0/0 Ch)</div>
+            </div>
+
+            <div onclick="selectSubject('AUDIT')" class="subject-card glass-panel rounded-2xl p-4 border-l-4 border-green-500 bg-green-500/10 cursor-pointer hover:bg-green-500/20 transition-all" data-subject="AUDIT">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs text-green-400 font-bold">AUDIT</span>
+                    <div class="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                        <i class="fas fa-search text-green-400 text-sm"></i>
+                    </div>
+                </div>
+                <h3 class="font-semibold text-sm mb-1 text-green-100">Advanced Auditing & Professional Ethics</h3>
+                <div class="text-2xl font-bold font-mono text-green-400" id="audit-time">00:00</div>
+                <div class="text-xs text-slate-400 mt-1" id="audit-progress">0% (0/0 Ch)</div>
+            </div>
+
+            <div onclick="selectSubject('DT')" class="subject-card glass-panel rounded-2xl p-4 border-l-4 border-yellow-500 bg-yellow-500/10 cursor-pointer hover:bg-yellow-500/20 transition-all" data-subject="DT">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs text-yellow-400 font-bold">DT</span>
+                    <div class="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                        <i class="fas fa-file-invoice-dollar text-yellow-400 text-sm"></i>
+                    </div>
+                </div>
+                <h3 class="font-semibold text-sm mb-1 text-yellow-100">Direct Tax Laws & International Taxation</h3>
+                <div class="text-2xl font-bold font-mono text-yellow-400" id="dt-time">00:00</div>
+                <div class="text-xs text-slate-400 mt-1" id="dt-progress">0% (0/0 Ch)</div>
+            </div>
+
+            <div onclick="selectSubject('IDT')" class="subject-card glass-panel rounded-2xl p-4 border-l-4 border-pink-500 bg-pink-500/10 cursor-pointer hover:bg-pink-500/20 transition-all" data-subject="IDT">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs text-pink-400 font-bold">IDT</span>
+                    <div class="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center">
+                        <i class="fas fa-receipt text-pink-400 text-sm"></i>
+                    </div>
+                </div>
+                <h3 class="font-semibold text-sm mb-1 text-pink-100">Indirect Tax Laws</h3>
+                <div class="text-2xl font-bold font-mono text-pink-400" id="idt-time">00:00</div>
+                <div class="text-xs text-slate-400 mt-1" id="idt-progress">0% (0/0 Ch)</div>
+            </div>
+
+            <div onclick="selectSubject('IBS')" class="subject-card glass-panel rounded-2xl p-4 border-l-4 border-cyan-500 bg-cyan-500/10 cursor-pointer hover:bg-cyan-500/20 transition-all" data-subject="IBS">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs text-cyan-400 font-bold">IBS</span>
+                    <div class="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center">
+                        <i class="fas fa-briefcase text-cyan-400 text-sm"></i>
+                    </div>
+                </div>
+                <h3 class="font-semibold text-sm mb-1 text-cyan-100">Integrated Business Solutions</h3>
+                <div class="text-2xl font-bold font-mono text-cyan-400" id="ibs-time">00:00</div>
+                <div class="text-xs text-slate-400 mt-1" id="ibs-progress">0% (0/0 Ch)</div>
+            </div>
+        </div>
+
+        <!-- Breadcrumb Navigation -->
+        <div class="breadcrumb rounded-xl px-4 py-2 mb-4 flex items-center gap-2 text-sm">
+            <span class="text-slate-400 cursor-pointer hover:text-white" onclick="showSubjectView()">Subjects</span>
+            <i class="fas fa-chevron-right text-slate-600 text-xs"></i>
+            <span id="breadcrumbSubject" class="font-semibold text-blue-400">AFM</span>
+            <span id="breadcrumbChapter" class="hidden">
+                <i class="fas fa-chevron-right text-slate-600 text-xs mx-2"></i>
+                <span class="font-semibold text-purple-400" id="chapterName">Chapter 1</span>
+            </span>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Left: Chapters List (4 columns) -->
+            <div class="lg:col-span-4 space-y-4">
+                <div class="glass-panel rounded-2xl p-4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-lg flex items-center gap-2">
+                            <i class="fas fa-book-open text-purple-400"></i>
+                            <span id="chaptersTitle">Chapters</span>
+                        </h3>
+                        <button onclick="openAddChapterModal()" class="text-xs bg-purple-500/20 text-purple-400 px-3 py-1 rounded-lg hover:bg-purple-500/30 transition-all">
+                            <i class="fas fa-plus"></i> Add
+                        </button>
+                    </div>
+
+                    <div id="chaptersList" class="space-y-2 max-h-[500px] overflow-y-auto pr-2">
+                        <!-- Chapters injected here -->
+                    </div>
+
+                    <div id="noChapters" class="hidden text-center py-8 text-slate-500">
+                        <i class="fas fa-book text-3xl mb-2 opacity-50"></i>
+                        <p class="text-sm">No chapters added yet</p>
+                        <button onclick="openAddChapterModal()" class="mt-2 text-purple-400 text-sm hover:underline">Add your first chapter</button>
+                    </div>
+                </div>
+
+                <!-- Chapter Detail Card (shown when chapter selected) -->
+                <div id="chapterDetailCard" class="hidden glass-panel rounded-2xl p-4">
+                    <h4 class="font-semibold mb-3 text-slate-300">Chapter Statistics</h4>
+                    <div class="space-y-3">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">Completion</span>
+                            <span class="font-mono text-purple-400" id="chapterDetailPercent">0%</span>
+                        </div>
+                        <div class="h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div id="chapterDetailBar" class="h-full bg-purple-500 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">Lectures</span>
+                            <span class="font-mono text-slate-300" id="chapterDetailLectures">0/0</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">Study Time</span>
+                            <span class="font-mono text-slate-300" id="chapterDetailTime">00:00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Subject Statistics Card (shown when subject has chapters) -->
+                <div id="subjectDetailCard" class="hidden glass-panel rounded-2xl p-4">
+                    <h4 class="font-semibold mb-3 text-slate-300 flex items-center gap-2">
+                        <i class="fas fa-chart-pie text-blue-400"></i>
+                        Subject Statistics
+                    </h4>
+                    <div class="space-y-3">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">Chapters Completed</span>
+                            <span class="font-mono text-blue-400" id="subjectDetailPercent">0%</span>
+                        </div>
+                        <div class="h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div id="subjectDetailBar" class="h-full bg-blue-500 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">Chapters</span>
+                            <span class="font-mono text-slate-300" id="subjectDetailChapters">0/0</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">Total Lectures</span>
+                            <span class="font-mono text-slate-300" id="subjectDetailLectures">0/0</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">Total Study Time</span>
+                            <span class="font-mono text-slate-300" id="subjectDetailTime">00:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Middle: Lectures List (5 columns) -->
+            <div class="lg:col-span-5 space-y-4">
+                <div class="glass-panel rounded-2xl p-4 min-h-[600px]">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-lg flex items-center gap-2">
+                            <i class="fas fa-video text-blue-400"></i>
+                            <span id="lecturesTitle">Select a Chapter</span>
+                        </h3>
+                        <button onclick="openAddLectureModal()" id="addLectureBtn" class="hidden text-xs bg-blue-500/20 text-blue-400 px-3 py-1 rounded-lg hover:bg-blue-500/30 transition-all">
+                            <i class="fas fa-plus"></i> Add Lecture
+                        </button>
+                    </div>
+
+                    <div id="lecturesList" class="space-y-3">
+                        <div class="text-center py-12 text-slate-500">
+                            <i class="fas fa-arrow-left text-3xl mb-3 opacity-50"></i>
+                            <p>Select a chapter to view lectures</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Stopwatch & Analytics (3 columns) -->
+            <div class="lg:col-span-3 space-y-4">
+                <!-- Stopwatch -->
+                <div class="glass-panel rounded-2xl p-4 border-2 border-transparent transition-all" id="stopwatchCard">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-semibold flex items-center gap-2">
+                            <i class="fas fa-stopwatch text-purple-400"></i>
+                            Study Timer
+                        </h3>
+                        <span id="recordingIndicator" class="hidden w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                    </div>
+
+                    <div class="text-center mb-4">
+                        <div class="text-4xl font-bold font-mono text-purple-400 mb-1" id="stopwatchDisplay">00:00:00</div>
+                        <div class="text-xs text-slate-400" id="activeChapterDisplay">No chapter selected</div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <button onclick="startStopwatch()" id="startBtn" class="bg-green-500/20 text-green-400 border border-green-500/30 py-2 rounded-lg text-sm font-semibold hover:bg-green-500/30 transition-all">
+                            <i class="fas fa-play"></i> Start
+                        </button>
+                        <button onclick="pauseStopwatch()" id="pauseBtn" class="hidden bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 py-2 rounded-lg text-sm font-semibold hover:bg-yellow-500/30 transition-all">
+                            <i class="fas fa-pause"></i> Pause
+                        </button>
+                        <button onclick="stopStopwatch()" id="stopBtn" class="hidden bg-red-500/20 text-red-400 border border-red-500/30 py-2 rounded-lg text-sm font-semibold hover:bg-red-500/30 transition-all col-span-2">
+                            <i class="fas fa-stop"></i> Stop & Save
+                        </button>
+                    </div>
+
+                    <div class="text-xs text-slate-500 text-center">
+                        Studying: <span id="currentSubjectDisplay" class="text-purple-400 font-semibold">-</span>
+                    </div>
+                </div>
+
+                <!-- Today's Stats -->
+                <div class="glass-panel rounded-2xl p-4">
+                    <h3 class="font-semibold mb-3 text-sm text-slate-400 uppercase tracking-wider">Today's Study</h3>
+                    <div id="todayBreakdown" class="space-y-2 text-sm">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Weekly Chart -->
+                <div class="glass-panel rounded-2xl p-4">
+                    <h3 class="font-semibold mb-3 text-sm">Weekly Pattern</h3>
+                    <div class="h-32">
+                        <canvas id="weeklyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Chapter Modal -->
+    <div id="addChapterModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="glass-panel rounded-2xl p-6 w-full max-w-md modal-enter">
+            <h2 class="text-2xl font-bold mb-4">Add New Chapter</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-slate-400 mb-2">Chapter Number</label>
+                    <input type="number" id="chapterNumber" class="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white font-mono" placeholder="1">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-2">Chapter Name</label>
+                    <input type="text" id="chapterNameInput" class="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white" placeholder="e.g., Mergers & Acquisitions">
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeAddChapterModal()" class="flex-1 py-3 rounded-xl border border-slate-600 text-slate-400 hover:bg-slate-800">Cancel</button>
+                <button onclick="saveNewChapter()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold">Add Chapter</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Lecture Modal -->
+    <div id="addLectureModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="glass-panel rounded-2xl p-6 w-full max-w-md modal-enter">
+            <h2 class="text-2xl font-bold mb-4">Add Lecture to <span id="addLectureChapterName" class="text-purple-400">Chapter</span></h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-slate-400 mb-2">Lecture Title</label>
+                    <input type="text" id="lectureTitleInput" class="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white" placeholder="e.g., Introduction to Synergy">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-2">Duration (HH:MM:SS)</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="lecHours" placeholder="00" class="flex-1 bg-slate-800/50 border border-slate-700 rounded-xl px-3 py-3 text-center font-mono">
+                        <span class="self-center text-slate-500">:</span>
+                        <input type="number" id="lecMinutes" placeholder="00" class="flex-1 bg-slate-800/50 border border-slate-700 rounded-xl px-3 py-3 text-center font-mono">
+                        <span class="self-center text-slate-500">:</span>
+                        <input type="number" id="lecSeconds" placeholder="00" class="flex-1 bg-slate-800/50 border border-slate-700 rounded-xl px-3 py-3 text-center font-mono">
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeAddLectureModal()" class="flex-1 py-3 rounded-xl border border-slate-600 text-slate-400 hover:bg-slate-800">Cancel</button>
+                <button onclick="saveNewLecture()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold">Add Lecture</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lecture Detail Modal (UPDATED with time display) -->
+    <div id="lectureDetailModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="glass-panel rounded-2xl p-6 w-full max-w-lg modal-enter max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <span class="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-400" id="detailLectureSubject">AFM</span>
+                    <h2 class="text-xl font-bold mt-2" id="detailLectureTitle">Lecture Title</h2>
+                </div>
+                <button onclick="closeLectureDetailModal()" class="text-slate-400 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 mb-6">
+                <div>
+                    <label class="block text-sm text-slate-400 mb-2">Status</label>
+                    <select id="detailStatus" onchange="updateDetailStatus()" class="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white">
+                        <option value="not-started">🔴 Not Started</option>
+                        <option value="in-progress">🟡 In Progress</option>
+                        <option value="completed">✅ Completed</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm text-slate-400 mb-2">Progress</label>
+                    <input type="range" id="detailProgress" min="0" max="100" class="w-full accent-purple-500" oninput="updateDetailProgress()">
+                    <div class="flex justify-between text-sm font-mono mt-1">
+                        <span class="text-purple-400" id="detailProgressText">0%</span>
+                        <span class="text-slate-400" id="detailTimeText">0:00:00 / 0:00:00</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm text-slate-400 mb-2">Notes</label>
+                    <div id="detailNotes" class="space-y-2 mb-2 max-h-32 overflow-y-auto"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="detailNoteInput" class="flex-1 bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-2 text-sm" placeholder="Add note..." onkeypress="if(event.key==='Enter') addDetailNote()">
+                        <button onclick="addDetailNote()" class="bg-purple-500/20 text-purple-400 px-4 py-2 rounded-xl text-sm">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="saveLectureDetails()" class="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-xl font-semibold">Save Changes</button>
+                <button onclick="deleteLecture()" class="px-4 py-3 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/20">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data Structure
+        const subjects = {
+            FR: { name: 'Financial Reporting', color: 'blue', chapters: [] },
+            AFM: { name: 'Advanced Financial Management', color: 'purple', chapters: [] },
+            AUDIT: { name: 'Advanced Auditing, Assurance and Professional Ethics', color: 'green', chapters: [] },
+            DT: { name: 'Direct Tax Laws & International Taxation', color: 'yellow', chapters: [] },
+            IDT: { name: 'Indirect Tax Laws', color: 'pink', chapters: [] },
+            IBS: { name: 'Integrated Business Solutions', color: 'cyan', chapters: [] }
+        };
+
+        // Chapters data from your JSON
+        const chaptersData = {
+            FR: [
+                "Introduction to General Purpose Financial Statements as per Indian Accounting Standards (Ind AS)",
+                "Conceptual Framework for Financial Reporting under Ind AS",
+                "Application of Indian Accounting Standards (Ind AS) - Asset Based Standards",
+                "Application of Indian Accounting Standards (Ind AS) - Liabilities Based Standards",
+                "Application of Indian Accounting Standards (Ind AS) - Revenue Based Standards",
+                "Application of Indian Accounting Standards (Ind AS) - Other Standards",
+                "Business Combinations and Corporate Restructuring (Ind AS 103)",
+                "Consolidated Financial Statements (Ind AS 110, 111, 28)",
+                "Analysis of Financial Statements",
+                "Professional and Ethical Duty of a Chartered Accountant",
+                "Accounting and Technology"
+            ],
+            AFM: [
+                "Financial Policy and Corporate Strategy",
+                "Risk Management",
+                "Advanced Capital Budgeting Decisions",
+                "Security Analysis",
+                "Security Valuation",
+                "Portfolio Management",
+                "Securitization",
+                "Mutual Funds",
+                "Derivatives Analysis and Valuation",
+                "Foreign Exchange Exposure and Risk Management",
+                "International Financial Management",
+                "Interest Rate Risk Management",
+                "Business Valuation",
+                "Mergers, Acquisitions and Corporate Restructuring",
+                "Startup Finance"
+            ],
+            AUDIT: [
+                "Quality Control",
+                "General Auditing Principles and Auditors Responsibilities",
+                "Audit Planning, Strategy and Execution",
+                "Materiality, Risk Assessment and Internal Control",
+                "Audit Evidence",
+                "Completion and Review",
+                "Reporting",
+                "Specialised Areas",
+                "Audit-related Services and Other Assurance Services",
+                "Review of Financial Information",
+                "Prospective Financial Information and Other Assurance Services",
+                "Digital Auditing and Assurance",
+                "Group Audits",
+                "Special Features of Audit of Banks & Non-Banking Financial Companies",
+                "Overview of Audit of Public Sector Undertakings",
+                "Internal Audit",
+                "Due Diligence, Investigation and Forensic Accounting",
+                "Emerging Areas: SDG and ESG Assurance",
+                "Professional Ethics and Liabilities of Auditors"
+            ],
+            DT: [
+                "Basic Concepts",
+                "Incomes which do not form part of Total Income",
+                "Profits and Gains of Business or Profession",
+                "Capital Gains",
+                "Income from Other Sources",
+                "Aggregation of Income, Set-Off and Carry Forward of Losses",
+                "Deductions from Gross Total Income",
+                "Assessment of Various Entities",
+                "Assessment of Trusts, Political Parties and Special Entities",
+                "Tax Planning, Tax Evasion and Tax Avoidance",
+                "Taxation of Digital Transactions",
+                "Deduction, Collection and Recovery of Tax",
+                "Income-tax Authorities",
+                "Assessment Procedure",
+                "Appeals and Revision",
+                "Dispute Resolution",
+                "Penalties",
+                "Offences and Prosecution",
+                "Liability in Special Cases",
+                "Transfer Pricing and Other Anti-Avoidance Measures",
+                "Non-Resident Taxation",
+                "Double Taxation Relief",
+                "Advance Rulings",
+                "Equalisation Levy",
+                "Application and Interpretation of Tax Treaties",
+                "Model Tax Conventions",
+                "Base Erosion and Profit Shifting (BEPS)"
+            ],
+            IDT: [
+                "Supply under GST",
+                "Charge of GST",
+                "Place of Supply",
+                "Exemptions from GST",
+                "Time of Supply",
+                "Value of Supply",
+                "Input Tax Credit",
+                "Registration",
+                "Tax Invoice, Credit and Debit Notes",
+                "Accounts and Records; E-way Bill",
+                "Payment of Tax",
+                "Electronic Commerce Transactions",
+                "Returns",
+                "Import and Export under GST",
+                "Refunds",
+                "Job Work",
+                "Assessment and Audit",
+                "Inspection, Search, Seizure and Arrest",
+                "Demands and Recovery",
+                "Liability to Pay in Certain Cases",
+                "Offences and Penalties",
+                "Appeals and Revision",
+                "Advance Ruling",
+                "Levy of and Exemptions from Customs Duty",
+                "Types of Duty",
+                "Classification of Imported and Export Goods",
+                "Valuation under the Customs Act, 1962",
+                "Importation, Exportation and Transportation of Goods",
+                "Warehousing",
+                "Foreign Trade Policy"
+            ],
+            IBS: [
+                "Multi-disciplinary Case Study involving Financial Reporting, Advanced Financial Management, Advanced Auditing, Direct Tax Laws, Indirect Tax Laws, and Strategic Management."
+            ]
+        };
+
+        // Populate chapters into subjects
+        for (let subjectCode in chaptersData) {
+            subjects[subjectCode].chapters = chaptersData[subjectCode].map((chapterName, index) => ({
+                id: index + 1,  // simple sequential ID per subject
+                number: index + 1,
+                name: chapterName,
+                lectures: []
+            }));
+        }
+
+        let currentSubject = 'AFM';
+        let currentChapter = null;
+        let currentLecture = null;
+        let stopwatchInterval = null;
+        let stopwatchSeconds = 0;
+        let isRunning = false;
+        let todayStudy = { FR: 0, AFM: 0, AUDIT: 0, DT: 0, IDT: 0, IBS: 0 };
+
+        // ========== LOCALSTORAGE FUNCTIONS ==========
+        function loadData() {
+            const saved = localStorage.getItem('studyTrackerData');
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    // Restore subjects chapters
+                    for (let sub in data.subjects) {
+                        if (subjects[sub]) {
+                            subjects[sub].chapters = data.subjects[sub].chapters || [];
+                        }
+                    }
+                    // Restore today's study
+                    if (data.todayStudy) {
+                        todayStudy = data.todayStudy;
+                    }
+                    // Restore streak and last login (already in localStorage, but we set them)
+                    if (data.streak) localStorage.setItem('streak', data.streak);
+                    if (data.lastLogin) localStorage.setItem('lastLogin', data.lastLogin);
+                } catch (e) {
+                    console.error('Failed to load data', e);
+                }
+            }
+        }
+
+        function saveData() {
+            const data = {
+                subjects: subjects,
+                todayStudy: todayStudy,
+                streak: localStorage.getItem('streak'),
+                lastLogin: localStorage.getItem('lastLogin')
+            };
+            localStorage.setItem('studyTrackerData', JSON.stringify(data));
+        }
+        // ============================================
+
+        // Initialize
+        window.onload = function() {
+            loadData();               // Load saved data first
+            checkStreak();            // Update streak and possibly reset todayStudy
+            selectSubject('AFM');      // Set initial view
+            initChart();
+            updateTodayBreakdown();
+            updateSubjectCards();       // Show today's study times on subject cards
+        };
+
+        function checkStreak() {
+            const lastLogin = localStorage.getItem('lastLogin');
+            const today = new Date().toDateString();
+
+            if (lastLogin === today) {
+                // Already logged in, keep todayStudy as loaded
+            } else if (lastLogin === new Date(Date.now() - 86400000).toDateString()) {
+                let streak = parseInt(localStorage.getItem('streak') || '0');
+                streak++;
+                localStorage.setItem('streak', streak);
+                localStorage.setItem('lastLogin', today);
+                document.getElementById('streakCount').textContent = streak;
+                // Reset today's study for new day
+                todayStudy = { FR: 0, AFM: 0, AUDIT: 0, DT: 0, IDT: 0, IBS: 0 };
+                saveData();  // save reset todayStudy
+            } else {
+                localStorage.setItem('streak', '1');
+                localStorage.setItem('lastLogin', today);
+                document.getElementById('streakCount').textContent = '1';
+                // Reset today's study
+                todayStudy = { FR: 0, AFM: 0, AUDIT: 0, DT: 0, IDT: 0, IBS: 0 };
+                saveData();
+            }
+        }
+
+        function selectSubject(subject) {
+            currentSubject = subject;
+            currentChapter = null;
+
+            // Update UI
+            document.querySelectorAll('.subject-card').forEach(card => {
+                card.classList.remove('ring-2', 'ring-white');
+                if (card.dataset.subject === subject) {
+                    card.classList.add('ring-2', 'ring-white');
+                }
+            });
+
+            document.getElementById('breadcrumbSubject').textContent = subject;
+            document.getElementById('breadcrumbSubject').className = `font-semibold text-${subjects[subject].color}-400`;
+            document.getElementById('breadcrumbChapter').classList.add('hidden');
+
+            document.getElementById('chaptersTitle').textContent = `${subjects[subject].name} Chapters`;
+            document.getElementById('lecturesTitle').textContent = 'Select a Chapter';
+            document.getElementById('addLectureBtn').classList.add('hidden');
+            document.getElementById('chapterDetailCard').classList.add('hidden');
+
+            renderChapters();
+            renderSubjectProgress();
+            updateSubjectStatistics();
+
+            // Reset lectures view
+            document.getElementById('lecturesList').innerHTML = `
+                <div class="text-center py-12 text-slate-500">
+                    <i class="fas fa-arrow-left text-3xl mb-3 opacity-50"></i>
+                    <p>Select a chapter to view lectures</p>
+                </div>
+            `;
+        }
+
+        function renderSubjectProgress() {
+            const subject = subjects[currentSubject];
+            const totalChapters = subject.chapters.length;
+            const completedChapters = subject.chapters.filter(ch => {
+                const totalLecs = ch.lectures.length;
+                const completedLecs = ch.lectures.filter(l => l.status === 'completed').length;
+                return totalLecs > 0 && completedLecs === totalLecs;
+            }).length;
+
+            const percentage = totalChapters > 0 ? ((completedChapters / totalChapters) * 100).toFixed(2) : 0;
+
+            document.getElementById(`${currentSubject.toLowerCase()}-progress`).textContent = 
+                `${percentage}% (${completedChapters}/${totalChapters} Ch)`;
+        }
+
+        function updateSubjectStatistics() {
+            const subject = subjects[currentSubject];
+            const color = subject.color;
+            const card = document.getElementById('subjectDetailCard');
+
+            if (subject.chapters.length === 0) {
+                card.classList.add('hidden');
+                return;
+            }
+
+            card.classList.remove('hidden');
+
+            const totalChapters = subject.chapters.length;
+            const completedChapters = subject.chapters.filter(ch => {
+                const totalLecs = ch.lectures.length;
+                const completedLecs = ch.lectures.filter(l => l.status === 'completed').length;
+                return totalLecs > 0 && completedLecs === totalLecs;
+            }).length;
+
+            const chapterPercentage = totalChapters > 0 ? ((completedChapters / totalChapters) * 100) : 0;
+
+            const totalLectures = subject.chapters.reduce((sum, ch) => sum + ch.lectures.length, 0);
+            const completedLectures = subject.chapters.reduce((sum, ch) => 
+                sum + ch.lectures.filter(l => l.status === 'completed').length, 0);
+
+            const totalSeconds = subject.chapters.reduce((sum, ch) => 
+                sum + ch.lectures.reduce((lecSum, l) => lecSum + l.completedSeconds, 0), 0);
+            const time = secondsToTime(totalSeconds);
+
+            document.getElementById('subjectDetailPercent').textContent = chapterPercentage.toFixed(1) + '%';
+            document.getElementById('subjectDetailPercent').className = `font-mono text-${color}-400`;
+            document.getElementById('subjectDetailBar').style.width = chapterPercentage + '%';
+            document.getElementById('subjectDetailBar').className = `h-full bg-${color}-500 rounded-full transition-all`;
+            document.getElementById('subjectDetailChapters').textContent = `${completedChapters}/${totalChapters}`;
+            document.getElementById('subjectDetailLectures').textContent = `${completedLectures}/${totalLectures}`;
+            document.getElementById('subjectDetailTime').textContent = `${time.h}:${time.m}`;
+        }
+
+        function renderChapters() {
+            const container = document.getElementById('chaptersList');
+            const subject = subjects[currentSubject];
+            const color = subject.color;
+
+            if (subject.chapters.length === 0) {
+                container.innerHTML = '';
+                document.getElementById('noChapters').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('noChapters').classList.add('hidden');
+
+            subject.chapters.sort((a, b) => a.number - b.number);
+
+            container.innerHTML = subject.chapters.map(chapter => {
+                const totalLecs = chapter.lectures.length;
+                const completedLecs = chapter.lectures.filter(l => l.status === 'completed').length;
+                const inProgressLecs = chapter.lectures.filter(l => l.status === 'in-progress').length;
+
+                const completion = totalLecs > 0 ? (completedLecs / totalLecs * 100) : 0;
+                const isActive = currentChapter && currentChapter.id === chapter.id;
+
+                let statusIcon = '⚪';
+                let statusColor = 'slate';
+                if (completedLecs === totalLecs && totalLecs > 0) {
+                    statusIcon = '✅';
+                    statusColor = 'green';
+                } else if (inProgressLecs > 0 || completedLecs > 0) {
+                    statusIcon = '🟡';
+                    statusColor = 'yellow';
+                }
+
+                return `
+                <div onclick="selectChapter(${chapter.id})" 
+                     class="chapter-card glass-panel rounded-xl p-3 cursor-pointer border-l-4 ${isActive ? `border-${color}-500 active` : 'border-transparent'} hover:bg-white/5 relative group">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-${statusColor}-400 text-xs">${statusIcon}</span>
+                                <span class="text-xs text-${color}-400 font-semibold">Ch ${chapter.number}</span>
+                            </div>
+                            <h4 class="font-semibold text-sm text-white ${isActive ? `text-${color}-400` : ''}">${chapter.name}</h4>
+                            <div class="flex items-center gap-3 mt-2 text-xs text-slate-400">
+                                <span>${completedLecs}/${totalLecs} Lectures</span>
+                                <span class="font-mono text-${color}-400">${completion.toFixed(0)}%</span>
+                            </div>
+                        </div>
+                        <button onclick="event.stopPropagation(); deleteChapter(${chapter.id})" 
+                                class="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-1">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="mt-2 h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <div class="h-full bg-${color}-500 rounded-full transition-all" style="width: ${completion}%"></div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function selectChapter(chapterId) {
+            const subject = subjects[currentSubject];
+            currentChapter = subject.chapters.find(ch => ch.id === chapterId);
+
+            if (!currentChapter) return;
+
+            document.getElementById('breadcrumbChapter').classList.remove('hidden');
+            document.getElementById('chapterName').textContent = `Ch ${currentChapter.number}: ${currentChapter.name}`;
+            document.getElementById('chapterName').className = `font-semibold text-${subject.color}-400`;
+
+            document.getElementById('lecturesTitle').innerHTML = `
+                <span class="text-${subject.color}-400">Ch ${currentChapter.number}</span> Lectures
+            `;
+            document.getElementById('addLectureBtn').classList.remove('hidden');
+            document.getElementById('addLectureChapterName').textContent = currentChapter.name;
+
+            document.getElementById('chapterDetailCard').classList.remove('hidden');
+            updateChapterDetailCard();
+
+            renderChapters();
+            renderLectures();
+
+            document.getElementById('activeChapterDisplay').textContent = `Ch ${currentChapter.number}: ${currentChapter.name}`;
+            document.getElementById('currentSubjectDisplay').textContent = subjects[currentSubject].name;
+        }
+
+        function updateChapterDetailCard() {
+            if (!currentChapter) return;
+
+            const totalLecs = currentChapter.lectures.length;
+            const completedLecs = currentChapter.lectures.filter(l => l.status === 'completed').length;
+            const completion = totalLecs > 0 ? (completedLecs / totalLecs * 100) : 0;
+
+            const totalSeconds = currentChapter.lectures.reduce((sum, l) => sum + l.completedSeconds, 0);
+            const time = secondsToTime(totalSeconds);
+
+            document.getElementById('chapterDetailPercent').textContent = completion.toFixed(1) + '%';
+            document.getElementById('chapterDetailBar').style.width = completion + '%';
+            document.getElementById('chapterDetailLectures').textContent = `${completedLecs}/${totalLecs}`;
+            document.getElementById('chapterDetailTime').textContent = `${time.h}:${time.m}`;
+        }
+
+        function renderLectures() {
+            const container = document.getElementById('lecturesList');
+            const color = subjects[currentSubject].color;
+
+            if (!currentChapter || currentChapter.lectures.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-slate-500">
+                        <i class="fas fa-video-slash text-3xl mb-2 opacity-50"></i>
+                        <p class="text-sm">No lectures in this chapter</p>
+                        <button onclick="openAddLectureModal()" class="mt-2 text-${color}-400 text-sm hover:underline">Add first lecture</button>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = currentChapter.lectures.map((lecture, idx) => {
+                const total = secondsToTime(lecture.totalSeconds);
+                const completed = secondsToTime(lecture.completedSeconds);
+                const percentage = ((lecture.completedSeconds / lecture.totalSeconds) * 100).toFixed(0);
+
+                const statusColors = {
+                    'completed': 'text-green-400',
+                    'in-progress': 'text-yellow-400',
+                    'not-started': 'text-slate-400'
+                };
+
+                return `
+                <div onclick="openLectureDetail(${lecture.id})" 
+                     class="lecture-item glass-panel rounded-xl p-4 cursor-pointer border-l-4 border-${color}-500 hover:border-${color}-400">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-xs ${statusColors[lecture.status]} font-semibold uppercase">${lecture.status.replace('-', ' ')}</span>
+                                <span class="text-xs text-slate-500">Lecture ${idx + 1}</span>
+                            </div>
+                            <h4 class="font-semibold text-white hover:text-${color}-400 transition-colors">${lecture.title}</h4>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xl font-bold font-mono text-${color}-400">${percentage}%</div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between text-xs text-slate-400 font-mono mb-2">
+                        <span>${completed.h}:${completed.m}:${completed.s} / ${total.h}:${total.m}:${total.s}</span>
+                        <span>${lecture.notes.length} notes</span>
+                    </div>
+
+                    <div class="h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <div class="h-full bg-${color}-500 rounded-full transition-all" style="width: ${percentage}%"></div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        // Chapter Management
+        function openAddChapterModal() {
+            document.getElementById('addChapterModal').classList.remove('hidden');
+            document.getElementById('addChapterModal').classList.add('flex');
+            document.getElementById('chapterNumber').value = subjects[currentSubject].chapters.length + 1;
+        }
+
+        function closeAddChapterModal() {
+            document.getElementById('addChapterModal').classList.add('hidden');
+            document.getElementById('addChapterModal').classList.remove('flex');
+        }
+
+        function saveNewChapter() {
+            const number = parseInt(document.getElementById('chapterNumber').value) || 1;
+            const name = document.getElementById('chapterNameInput').value || `Chapter ${number}`;
+
+            const exists = subjects[currentSubject].chapters.find(ch => ch.number === number);
+            if (exists) {
+                alert(`Chapter ${number} already exists!`);
+                return;
+            }
+
+            subjects[currentSubject].chapters.push({
+                id: Date.now(),
+                number: number,
+                name: name,
+                lectures: []
+            });
+
+            closeAddChapterModal();
+            document.getElementById('chapterNameInput').value = '';
+            renderChapters();
+            renderSubjectProgress();
+            updateSubjectStatistics();
+            saveData(); // <-- SAVE AFTER ADD
+        }
+
+        function deleteChapter(chapterId) {
+            if (!confirm('Delete this chapter and all its lectures?')) return;
+
+            subjects[currentSubject].chapters = subjects[currentSubject].chapters.filter(ch => ch.id !== chapterId);
+
+            if (currentChapter && currentChapter.id === chapterId) {
+                currentChapter = null;
+                document.getElementById('breadcrumbChapter').classList.add('hidden');
+                document.getElementById('lecturesList').innerHTML = `
+                    <div class="text-center py-12 text-slate-500">
+                        <i class="fas fa-arrow-left text-3xl mb-3 opacity-50"></i>
+                        <p>Select a chapter to view lectures</p>
+                    </div>
+                `;
+                document.getElementById('addLectureBtn').classList.add('hidden');
+                document.getElementById('chapterDetailCard').classList.add('hidden');
+            }
+
+            renderChapters();
+            renderSubjectProgress();
+            updateSubjectStatistics();
+            saveData(); // <-- SAVE AFTER DELETE
+        }
+
+        // Lecture Management
+        function openAddLectureModal() {
+            if (!currentChapter) return;
+            document.getElementById('addLectureModal').classList.remove('hidden');
+            document.getElementById('addLectureModal').classList.add('flex');
+        }
+
+        function closeAddLectureModal() {
+            document.getElementById('addLectureModal').classList.add('hidden');
+            document.getElementById('addLectureModal').classList.remove('flex');
+        }
+
+        function saveNewLecture() {
+            const title = document.getElementById('lectureTitleInput').value || 'Untitled Lecture';
+            const h = parseInt(document.getElementById('lecHours').value) || 0;
+            const m = parseInt(document.getElementById('lecMinutes').value) || 0;
+            const s = parseInt(document.getElementById('lecSeconds').value) || 0;
+
+            currentChapter.lectures.push({
+                id: Date.now(),
+                title: title,
+                totalSeconds: h * 3600 + m * 60 + s,
+                completedSeconds: 0,
+                status: 'not-started',
+                notes: []
+            });
+
+            closeAddLectureModal();
+            document.getElementById('lectureTitleInput').value = '';
+            document.getElementById('lecHours').value = '';
+            document.getElementById('lecMinutes').value = '';
+            document.getElementById('lecSeconds').value = '';
+
+            renderLectures();
+            updateChapterDetailCard();
+            renderChapters();
+            renderSubjectProgress();
+            updateSubjectStatistics();
+            saveData(); // <-- SAVE AFTER ADD
+        }
+
+        // Lecture Detail Modal (UPDATED with time display)
+        function openLectureDetail(lectureId) {
+            currentLecture = currentChapter.lectures.find(l => l.id === lectureId);
+            if (!currentLecture) return;
+
+            document.getElementById('detailLectureSubject').textContent = currentSubject;
+            document.getElementById('detailLectureSubject').className = `text-xs px-2 py-1 rounded bg-${subjects[currentSubject].color}-500/20 text-${subjects[currentSubject].color}-400`;
+            document.getElementById('detailLectureTitle').textContent = currentLecture.title;
+            document.getElementById('detailStatus').value = currentLecture.status;
+            const percentage = (currentLecture.completedSeconds / currentLecture.totalSeconds * 100).toFixed(0);
+            document.getElementById('detailProgress').value = percentage;
+            document.getElementById('detailProgressText').textContent = percentage + '%';
+            updateDetailTimeDisplay(); // new function to show time
+
+            renderDetailNotes();
+
+            document.getElementById('lectureDetailModal').classList.remove('hidden');
+            document.getElementById('lectureDetailModal').classList.add('flex');
+        }
+
+        // New function to update the time display in the detail modal
+        function updateDetailTimeDisplay() {
+            if (!currentLecture) return;
+            const completed = secondsToTime(currentLecture.completedSeconds);
+            const total = secondsToTime(currentLecture.totalSeconds);
+            document.getElementById('detailTimeText').textContent = `${completed.h}:${completed.m}:${completed.s} / ${total.h}:${total.m}:${total.s}`;
+        }
+
+        function closeLectureDetailModal() {
+            document.getElementById('lectureDetailModal').classList.add('hidden');
+            document.getElementById('lectureDetailModal').classList.remove('flex');
+            currentLecture = null;
+        }
+
+        function updateDetailStatus() {
+            const status = document.getElementById('detailStatus').value;
+            currentLecture.status = status;
+
+            if (status === 'completed') {
+                currentLecture.completedSeconds = currentLecture.totalSeconds;
+                document.getElementById('detailProgress').value = 100;
+                document.getElementById('detailProgressText').textContent = '100%';
+                updateDetailTimeDisplay();
+            } else if (status === 'not-started') {
+                currentLecture.completedSeconds = 0;
+                document.getElementById('detailProgress').value = 0;
+                document.getElementById('detailProgressText').textContent = '0%';
+                updateDetailTimeDisplay();
+            }
+        }
+
+        function updateDetailProgress() {
+            const percentage = parseInt(document.getElementById('detailProgress').value);
+            document.getElementById('detailProgressText').textContent = percentage + '%';
+            currentLecture.completedSeconds = Math.round((percentage / 100) * currentLecture.totalSeconds);
+            updateDetailTimeDisplay(); // update the time display
+
+            if (percentage === 0) currentLecture.status = 'not-started';
+            else if (percentage === 100) currentLecture.status = 'completed';
+            else currentLecture.status = 'in-progress';
+
+            document.getElementById('detailStatus').value = currentLecture.status;
+        }
+
+        function renderDetailNotes() {
+            const container = document.getElementById('detailNotes');
+            container.innerHTML = currentLecture.notes.map((note, idx) => `
+                <div class="flex items-start gap-2 p-2 bg-slate-800/50 rounded-lg group">
+                    <span class="text-purple-400 mt-1">•</span>
+                    <span class="flex-1 text-sm text-slate-300">${note}</span>
+                    <button onclick="deleteDetailNote(${idx})" class="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function addDetailNote() {
+            const input = document.getElementById('detailNoteInput');
+            const note = input.value.trim();
+            if (!note) return;
+
+            currentLecture.notes.push(note);
+            input.value = '';
+            renderDetailNotes();
+            saveData(); // <-- SAVE AFTER ADD NOTE
+        }
+
+        function deleteDetailNote(idx) {
+            currentLecture.notes.splice(idx, 1);
+            renderDetailNotes();
+            saveData(); // <-- SAVE AFTER DELETE NOTE
+        }
+
+        function saveLectureDetails() {
+            renderLectures();
+            updateChapterDetailCard();
+            renderChapters();
+            renderSubjectProgress();
+            updateSubjectStatistics();
+            saveData(); // <-- SAVE AFTER DETAIL SAVE
+            closeLectureDetailModal();
+        }
+
+        function deleteLecture() {
+            if (!confirm('Delete this lecture?')) return;
+
+            currentChapter.lectures = currentChapter.lectures.filter(l => l.id !== currentLecture.id);
+            renderLectures();
+            updateChapterDetailCard();
+            renderChapters();
+            renderSubjectProgress();
+            updateSubjectStatistics();
+            saveData(); // <-- SAVE AFTER DELETE
+            closeLectureDetailModal();
+        }
+
+        // Stopwatch Functions
+        function startStopwatch() {
+            if (!currentChapter) {
+                alert('Please select a chapter first!');
+                return;
+            }
+
+            isRunning = true;
+            document.getElementById('startBtn').classList.add('hidden');
+            document.getElementById('pauseBtn').classList.remove('hidden');
+            document.getElementById('stopBtn').classList.remove('hidden');
+            document.getElementById('recordingIndicator').classList.remove('hidden');
+            document.getElementById('stopwatchCard').classList.add('stopwatch-active');
+
+            stopwatchInterval = setInterval(() => {
+                stopwatchSeconds++;
+                todayStudy[currentSubject]++;
+                updateStopwatchDisplay();
+                updateSubjectCards();
+                updateTodayBreakdown();
+            }, 1000);
+        }
+
+        function pauseStopwatch() {
+            clearInterval(stopwatchInterval);
+            isRunning = false;
+            document.getElementById('startBtn').classList.remove('hidden');
+            document.getElementById('startBtn').innerHTML = '<i class="fas fa-play"></i> Resume';
+            document.getElementById('pauseBtn').classList.add('hidden');
+            document.getElementById('recordingIndicator').classList.add('hidden');
+            document.getElementById('stopwatchCard').classList.remove('stopwatch-active');
+            saveData(); // <-- SAVE TODAY'S STUDY ON PAUSE
+        }
+
+        function stopStopwatch() {
+            clearInterval(stopwatchInterval);
+
+            if (stopwatchSeconds > 0 && currentLecture) {
+                currentLecture.completedSeconds = Math.min(
+                    currentLecture.completedSeconds + stopwatchSeconds,
+                    currentLecture.totalSeconds
+                );
+
+                const percentage = (currentLecture.completedSeconds / currentLecture.totalSeconds * 100);
+                if (percentage >= 100) currentLecture.status = 'completed';
+                else if (percentage > 0) currentLecture.status = 'in-progress';
+            }
+
+            stopwatchSeconds = 0;
+            isRunning = false;
+
+            document.getElementById('startBtn').classList.remove('hidden');
+            document.getElementById('startBtn').innerHTML = '<i class="fas fa-play"></i> Start';
+            document.getElementById('pauseBtn').classList.add('hidden');
+            document.getElementById('stopBtn').classList.add('hidden');
+            document.getElementById('recordingIndicator').classList.add('hidden');
+            document.getElementById('stopwatchCard').classList.remove('stopwatch-active');
+
+            updateStopwatchDisplay();
+            renderLectures();
+            updateChapterDetailCard();
+            renderChapters();
+            renderSubjectProgress();
+            updateSubjectStatistics();
+            saveData(); // <-- SAVE AFTER STOP (includes todayStudy and lecture progress)
+        }
+
+        function updateStopwatchDisplay() {
+            const time = secondsToTime(stopwatchSeconds);
+            document.getElementById('stopwatchDisplay').textContent = `${time.h}:${time.m}:${time.s}`;
+        }
+
+        function updateSubjectCards() {
+            Object.keys(todayStudy).forEach(subject => {
+                const time = secondsToTime(todayStudy[subject]);
+                document.getElementById(`${subject.toLowerCase()}-time`).textContent = `${time.h}:${time.m}`;
+            });
+        }
+
+        function updateTodayBreakdown() {
+            const container = document.getElementById('todayBreakdown');
+            const total = Object.values(todayStudy).reduce((a, b) => a + b, 0);
+
+            if (total === 0) {
+                container.innerHTML = '<div class="text-xs text-slate-500 italic">No study time today</div>';
+                return;
+            }
+
+            container.innerHTML = Object.entries(todayStudy)
+                .filter(([_, s]) => s > 0)
+                .sort((a, b) => b[1] - a[1])
+                .map(([subject, seconds]) => {
+                    const time = secondsToTime(seconds);
+                    const pct = (seconds / total * 100).toFixed(0);
+                    const color = subjects[subject].color;
+
+                    return `
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="w-8 font-semibold text-${color}-400">${subject}</span>
+                        <div class="flex-1 h-1.5 bg-slate-800 rounded-full">
+                            <div class="h-full bg-${color}-500 rounded-full" style="width: ${pct}%"></div>
+                        </div>
+                        <span class="w-12 text-right font-mono">${time.h}:${time.m}</span>
+                    </div>
+                    `;
+                }).join('');
+        }
+
+        // Utilities
+        function secondsToTime(totalSeconds) {
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            return {
+                h: hours.toString().padStart(2, '0'),
+                m: minutes.toString().padStart(2, '0'),
+                s: seconds.toString().padStart(2, '0')
+            };
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('weeklyChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
+                    datasets: [{
+                        data: [4, 6, 3, 5, 7, 4, 2],
+                        backgroundColor: 'rgba(139, 92, 246, 0.6)',
+                        borderColor: 'rgba(139, 92, 246, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { display: false },
+                        x: { 
+                            grid: { display: false },
+                            ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const icon = document.getElementById('themeIcon');
+
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                html.classList.add('light');
+                icon.classList.remove('fa-sun', 'text-yellow-400');
+                icon.classList.add('fa-moon', 'text-slate-600');
+            } else {
+                html.classList.remove('light');
+                html.classList.add('dark');
+                icon.classList.remove('fa-moon', 'text-slate-600');
+                icon.classList.add('fa-sun', 'text-yellow-400');
+            }
+        }
+
+        // Close modals on outside click
+        window.onclick = function(event) {
+            if (event.target.id === 'addChapterModal') closeAddChapterModal();
+            if (event.target.id === 'addLectureModal') closeAddLectureModal();
+            if (event.target.id === 'lectureDetailModal') closeLectureDetailModal();
+        }
+    </script>
+</body>
+</html>
